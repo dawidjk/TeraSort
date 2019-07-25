@@ -11,7 +11,7 @@ import (
 
 func main() {
 	fileSize := 1073741824
-	fileName := "/Users/dave07747/Development/Terabyte-Sort/eightGB.bin"
+
 	seed := int64(29)
 	writeSize := 1000000
 
