@@ -1,12 +1,8 @@
-package TerrabyteSort
+package terasort
 
 import (
-	"bytes"
-	"encoding/binary"
 	"log"
-	"math/rand"
 	"os"
-	"time"
 )
 
 func main() {
@@ -25,7 +21,6 @@ func main() {
 	}
 
 	file, err := os.OpenFile(fileName, os.O_RDONLY, os.ModeAppend)
-
 
 }
 
