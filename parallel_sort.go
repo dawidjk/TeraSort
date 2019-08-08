@@ -1,14 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 func main() {
+	start := time.Now()
+
 	oneGig := 134217728
 	readSize := oneGig
 	bytesInInt64 := 8
@@ -48,6 +53,41 @@ func main() {
 
 		parallelMergeSort(toBeSorted)
 
+		writeSorted(toBeSorted, i)
+	}
+
+	end := time.Now()
+	elapsed := end.Sub(start)
+
+	log.Println("Total time: ")
+	log.Println(elapsed / 1000)
+}
+
+func writeSorted(sorted []uint64, index int) {
+	tempFiles := "/Users/dave07747/Development/Terabyte-Sort/%d.bin"
+	writtenFileName := fmt.Sprintf(tempFiles, index)
+
+	var file, err = os.Create(writtenFileName)
+
+	if err != nil {
+		return
+	}
+
+	defer file.Close()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var binaryBuffer bytes.Buffer
+	for i := 0; i < len(sorted); i++ {
+		binary.Write(&binaryBuffer, binary.BigEndian, sorted[i])
+	}
+
+	_, writeErr := file.Write(binaryBuffer.Bytes())
+
+	if writeErr != nil {
+		log.Fatal(err)
 	}
 }
 
