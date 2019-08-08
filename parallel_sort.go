@@ -1,7 +1,8 @@
-package terasort
+package main
 
 import (
 	"encoding/binary"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -9,10 +10,9 @@ import (
 
 func main() {
 	oneGig := 134217728
-	totalFileSize := oneGig * 8
-	totalMemoryGb := 4
 	readSize := oneGig
 	bytesInInt64 := 8
+	totalFileSize := oneGig * 8
 
 	fileName := "/Users/dave07747/Development/Terabyte-Sort/eightGB.bin"
 
@@ -24,20 +24,82 @@ func main() {
 	}
 
 	file, err := os.OpenFile(fileName, os.O_RDONLY, os.ModeAppend)
-	readBytes := readNextSector(file, readSize)
 
 	uint64count := readSize / bytesInInt64
-	toBeSorted := make([]uint64, uint64count)
 
-	var wg sync.WaitGroup
-	wg.Add(uint64count)
+	for i := 0; i < totalFileSize/readSize; i++ {
+		toBeSorted := make([]uint64, uint64count)
+		readBytes := readNextSector(file, readSize)
+		// var wg sync.WaitGroup
+		// wg.Add(uint64count)
 
-	for i := 0; i < uint64count; i++ {
-		go func(i int) {
-			lowerBoundary := 8 * i
-			upperBoundary := 8 * (i + 1)
-			toBeSorted[i] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
-		}(i)
+		for j := 0; j < uint64count; j++ {
+			// go func(i int) {
+			// 	readBytes := readNextSector(file, readSize)
+			// 	lowerBoundary := 8 * i
+			// 	upperBoundary := 8 * (i + 1)
+			// 	toBeSorted[i] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
+			// }(i)
+			lowerBoundary := 8 * j
+			upperBoundary := 8 * (j + 1)
+			toBeSorted[j] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
+		}
+		println("Starting sorting")
+
+		parallelMergeSort(toBeSorted)
+
+	}
+}
+
+// https://hackernoon.com/parallel-merge-sort-in-go-fe14c1bc006
+func parallelMergeSort(toBeSorted []uint64) {
+	length := len(toBeSorted)
+
+	if length > 1 {
+		midpoint := length / 2
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			parallelMergeSort(toBeSorted[:midpoint])
+		}()
+
+		go func() {
+			defer wg.Done()
+			parallelMergeSort(toBeSorted[midpoint:])
+		}()
+
+		wg.Wait()
+		merge(toBeSorted, midpoint)
+	}
+}
+
+func merge(toBeMerged []uint64, middle int) {
+	temp := make([]uint64, len(toBeMerged))
+	copy(temp, toBeMerged)
+
+	tempLeft := 0
+	tempRight := middle
+	current := 0
+	high := len(toBeMerged) - 1
+
+	for tempLeft <= middle-1 && tempRight <= high {
+		if temp[tempLeft] <= temp[tempRight] {
+			toBeMerged[current] = temp[tempLeft]
+			tempLeft++
+		} else {
+			toBeMerged[current] = temp[tempRight]
+			tempRight++
+		}
+
+		current++
+	}
+
+	for tempLeft <= middle-1 {
+		toBeMerged[current] = temp[tempLeft]
+		current++
+		tempLeft++
 	}
 }
 
@@ -50,6 +112,10 @@ func readNextSector(file *os.File, number int) []byte {
 	_, err := file.Read(bytes)
 
 	if err != nil {
+		if err == io.EOF {
+			return nil
+		}
+
 		log.Fatal(err)
 	}
 

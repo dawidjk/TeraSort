@@ -1,4 +1,4 @@
-package generator
+package teragenerator
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ func main() {
 
 	seed := int64(29)
 	writeSize := 1000000
+	fileName := "/Users/dave07747/Development/Terabyte-Sort/eightGB.bin"
 
 	var _, err = os.Stat(fileName)
 
