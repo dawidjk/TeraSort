@@ -14,8 +14,8 @@ import (
 func main() {
 	start := time.Now()
 
-	oneGig := 134217728
-	readSize := oneGig
+	oneGig := 1073741824
+	maxRAMUsage := oneGig
 	bytesInInt64 := 8
 	totalFileSize := oneGig * 8
 
@@ -30,31 +30,32 @@ func main() {
 
 	file, err := os.OpenFile(fileName, os.O_RDONLY, os.ModeAppend)
 
-	uint64count := readSize / bytesInInt64
+	uint64count := maxRAMUsage / bytesInInt64
 
-	for i := 0; i < totalFileSize/readSize; i++ {
+	for i := 0; i < totalFileSize/maxRAMUsage; i++ {
 		toBeSorted := make([]uint64, uint64count)
-		readBytes := readNextSector(file, readSize)
-		// var wg sync.WaitGroup
-		// wg.Add(uint64count)
+		readBytes := readNextSector(file, maxRAMUsage)
 
 		for j := 0; j < uint64count; j++ {
-			// go func(i int) {
-			// 	readBytes := readNextSector(file, readSize)
-			// 	lowerBoundary := 8 * i
-			// 	upperBoundary := 8 * (i + 1)
-			// 	toBeSorted[i] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
-			// }(i)
 			lowerBoundary := 8 * j
 			upperBoundary := 8 * (j + 1)
 			toBeSorted[j] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
 		}
 		println("Starting sorting")
+		roundStart := time.Now()
 
-		parallelMergeSort(toBeSorted)
+		mergeSortConcurrent(toBeSorted)
+
+		end := time.Now()
+		elapsed := end.Sub(roundStart)
+
+		log.Println("Elapsed time: ")
+		log.Println(elapsed / 1000)
 
 		writeSorted(toBeSorted, i)
 	}
+
+	// fileMerge(totalFileSize/maxRAMUsage, maxRAMUsage)
 
 	end := time.Now()
 	elapsed := end.Sub(start)
@@ -62,6 +63,100 @@ func main() {
 	log.Println("Total time: ")
 	log.Println(elapsed / 1000)
 }
+
+var mergeSortWorkers = make(chan struct{}, 8)
+
+func mergeSortConcurrent(s []uint64) []uint64 {
+	if len(s) <= 1 {
+		return s
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	midPoint := len(s) / 2
+
+	var left []uint64
+	var right []uint64
+
+	select {
+	case mergeSortWorkers <- struct{}{}:
+		go func() {
+			left = mergeSortConcurrent(s[:midPoint])
+			<-mergeSortWorkers
+			wg.Done()
+		}()
+	default:
+		left = mergeSort(s[:midPoint])
+		wg.Done()
+	}
+
+	select {
+	case mergeSortWorkers <- struct{}{}:
+		go func() {
+			right = mergeSortConcurrent(s[midPoint:])
+			<-mergeSortWorkers
+			wg.Done()
+		}()
+
+	default:
+		right = mergeSort(s[midPoint:])
+		wg.Done()
+	}
+
+	wg.Wait()
+	return merge(left, right)
+}
+
+func mergeSort(s []uint64) []uint64 {
+	if len(s) <= 1 {
+		return s
+	}
+
+	midPoint := len(s) / 2
+
+	var left []uint64
+	var right []uint64
+
+	left = mergeSort(s[:midPoint])
+	right = mergeSort(s[midPoint:])
+
+	return merge(left, right)
+}
+
+func merge(left, right []uint64) []uint64 {
+	sorted := make([]uint64, 0, len(left)+len(right))
+
+	for len(right) > 0 || len(left) > 0 {
+		if len(right) == 0 {
+			return append(sorted, left...)
+		}
+
+		if len(left) == 0 {
+			return append(sorted, right...)
+		}
+
+		if right[0] >= left[0] {
+			sorted = append(sorted, left[0])
+			left = left[1:]
+		} else {
+			sorted = append(sorted, right[0])
+			right = right[1:]
+		}
+	}
+
+	return sorted
+}
+
+// func fileMerge(fileCount int, maxRAMUsage int) {
+// 	filesToBeMerged := fileCount
+// 	nextFileName := fileCount
+// 	currentFileName := 0
+
+// 	for filesToBeMerged != 1 {
+
+// 	}
+// }
 
 func writeSorted(sorted []uint64, index int) {
 	tempFiles := "/Users/dave07747/Development/Terabyte-Sort/%d.bin"
@@ -88,58 +183,6 @@ func writeSorted(sorted []uint64, index int) {
 
 	if writeErr != nil {
 		log.Fatal(err)
-	}
-}
-
-// https://hackernoon.com/parallel-merge-sort-in-go-fe14c1bc006
-func parallelMergeSort(toBeSorted []uint64) {
-	length := len(toBeSorted)
-
-	if length > 1 {
-		midpoint := length / 2
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		go func() {
-			defer wg.Done()
-			parallelMergeSort(toBeSorted[:midpoint])
-		}()
-
-		go func() {
-			defer wg.Done()
-			parallelMergeSort(toBeSorted[midpoint:])
-		}()
-
-		wg.Wait()
-		merge(toBeSorted, midpoint)
-	}
-}
-
-func merge(toBeMerged []uint64, middle int) {
-	temp := make([]uint64, len(toBeMerged))
-	copy(temp, toBeMerged)
-
-	tempLeft := 0
-	tempRight := middle
-	current := 0
-	high := len(toBeMerged) - 1
-
-	for tempLeft <= middle-1 && tempRight <= high {
-		if temp[tempLeft] <= temp[tempRight] {
-			toBeMerged[current] = temp[tempLeft]
-			tempLeft++
-		} else {
-			toBeMerged[current] = temp[tempRight]
-			tempRight++
-		}
-
-		current++
-	}
-
-	for tempLeft <= middle-1 {
-		toBeMerged[current] = temp[tempLeft]
-		current++
-		tempLeft++
 	}
 }
 
