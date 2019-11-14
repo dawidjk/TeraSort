@@ -55,7 +55,7 @@ func main() {
 		writeSorted(toBeSorted, i)
 	}
 
-	// fileMerge(totalFileSize/maxRAMUsage, maxRAMUsage)
+	fileMerge(totalFileSize/maxRAMUsage, maxRAMUsage)
 
 	end := time.Now()
 	elapsed := end.Sub(start)
@@ -148,26 +148,82 @@ func merge(left, right []uint64) []uint64 {
 	return sorted
 }
 
-// func fileMerge(fileCount int, maxRAMUsage int) {
-// 	filesToBeMerged := fileCount
-// 	nextFileName := fileCount
-// 	currentFileName := 0
+func fileMerge(fileCount int, maxRAMUsage int) {
+	bytesInInt64 := 8
+	filesReadConcurrent := 2
+	filesToBeMerged := fileCount
+	nextFileName := fileCount
+	currentFileName := 0
+	fileTemplate := "/Users/dave07747/Development/Terabyte-Sort/%d.bin"
 
-// 	for filesToBeMerged != 1 {
+	for filesToBeMerged != 1 {
+		println(fmt.Sprintf("Writing file: %d", nextFileName))
+		file1, err1 := os.Open(fmt.Sprintf(fileTemplate, currentFileName))
+		file2, err2 := os.Open(fmt.Sprintf(fileTemplate, currentFileName+1))
+		fi1, _ := file1.Stat()
+		fi2, _ := file2.Stat()
 
-// 	}
-// }
+		if err1 != nil || err2 != nil || fi1.Size() != fi2.Size() {
+			log.Fatal(err1)
+		}
+
+		fileSectorCount := int(fi1.Size() / int64(maxRAMUsage/filesReadConcurrent))
+		fileSectorLength := int(fi1.Size() / int64(fileSectorCount))
+		println(fileSectorCount)
+		println(int64(fileSectorLength))
+
+		for i := 0; i < int(fileSectorCount); i++ {
+			toBeMerged1 := make([]uint64, fileSectorLength/bytesInInt64)
+			readBytes := readNextSector(file1, fileSectorLength/bytesInInt64)
+
+			// Can optimize space complexity of this by truncating readBytes every time read
+			for j := 0; j < (fileSectorLength/bytesInInt64)/bytesInInt64; j++ {
+				lowerBoundary := bytesInInt64 * j
+				upperBoundary := bytesInInt64 * (j + 1)
+				toBeMerged1[j] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
+			}
+
+			toBeMerged2 := make([]uint64, fileSectorLength/bytesInInt64)
+			readBytes = readNextSector(file1, fileSectorLength/bytesInInt64)
+
+			for j := 0; j < (fileSectorLength/bytesInInt64)/bytesInInt64; j++ {
+				lowerBoundary := bytesInInt64 * j
+				upperBoundary := bytesInInt64 * (j + 1)
+				toBeMerged2[j] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
+			}
+
+			println("Merging")
+			merged := merge(toBeMerged1, toBeMerged2)
+			println("Saving Merged")
+			writeSorted(merged, nextFileName)
+		}
+
+		nextFileName++
+		filesToBeMerged--
+		os.Remove(fmt.Sprintf(fileTemplate, currentFileName))
+		os.Remove(fmt.Sprintf(fileTemplate, currentFileName+1))
+		currentFileName += 2
+	}
+}
 
 func writeSorted(sorted []uint64, index int) {
 	tempFiles := "/Users/dave07747/Development/Terabyte-Sort/%d.bin"
 	writtenFileName := fmt.Sprintf(tempFiles, index)
 
-	var file, err = os.Create(writtenFileName)
+	var _, err = os.Stat(writtenFileName)
 
-	if err != nil {
-		return
+	// create file if not exists
+	if os.IsNotExist(err) {
+		var file, err = os.Create(writtenFileName)
+
+		if err != nil {
+			return
+		}
+
+		defer file.Close()
 	}
 
+	file, err := os.OpenFile(writtenFileName, os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
 
 	if err != nil {
@@ -175,10 +231,11 @@ func writeSorted(sorted []uint64, index int) {
 	}
 
 	var binaryBuffer bytes.Buffer
+	println(len(sorted))
 	for i := 0; i < len(sorted); i++ {
 		binary.Write(&binaryBuffer, binary.BigEndian, sorted[i])
 	}
-
+	println(len(binaryBuffer.Bytes()))
 	_, writeErr := file.Write(binaryBuffer.Bytes())
 
 	if writeErr != nil {
