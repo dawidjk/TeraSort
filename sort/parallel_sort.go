@@ -7,6 +7,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
+	"sort"
+	"sync"
 	"time"
 )
 
@@ -40,11 +43,16 @@ func main() {
 			upperBoundary := 8 * (j + 1)
 			toBeSorted[j] = bytesToInt64(readBytes[lowerBoundary:upperBoundary])
 		}
+		println(len(toBeSorted))
 		println("Starting sorting")
 		roundStart := time.Now()
 
-		toBeSorted = mergeSort(toBeSorted)
+		toBeSorted = mergeSortConcurrent(toBeSorted)
 
+		end := time.Now()
+		elapsed := end.Sub(roundStart)
+
+		// Validate sorted
 		for j := 1; j < len(toBeSorted); j++ {
 			if toBeSorted[j-1] > toBeSorted[j] {
 				println(toBeSorted[j-1], toBeSorted[j], j)
@@ -52,9 +60,6 @@ func main() {
 				return
 			}
 		}
-
-		end := time.Now()
-		elapsed := end.Sub(roundStart)
 
 		log.Println("Elapsed time: ", elapsed/1000)
 		return
@@ -70,18 +75,37 @@ func main() {
 	log.Println(elapsed / 1000)
 }
 
-func mergeSort(s []uint64) []uint64 {
-	if len(s) <= 1 {
+func mergeSortConcurrent(s []uint64) []uint64 {
+	routineLimit := runtime.NumCPU() * 2
+	channel := make(chan struct{}, routineLimit)
+	defer close(channel)
+	return mergeSort(s, channel)
+}
+
+func mergeSort(s []uint64, channel chan struct{}) []uint64 {
+	if len(s) <= 20000 {
+		sort.Slice(s, func(i int, j int) bool { return s[i] <= s[j] })
 		return s
 	}
 
 	midPoint := len(s) / 2
 
-	left := mergeSort(s[:midPoint])
-	right := mergeSort(s[midPoint:])
+	waitGroup := sync.WaitGroup{}
+	var left []uint64
+	select {
+	case channel <- struct{}{}:
+		waitGroup.Add(1)
+		go func() {
+			left = mergeSort(s[:midPoint], channel)
+			<-channel
+			waitGroup.Done()
+		}()
+	default:
+		left = mergeSort(s[:midPoint], channel)
+	}
 
-	s = nil
-
+	right := mergeSort(s[midPoint:], channel)
+	waitGroup.Wait()
 	return merge(left, right)
 }
 

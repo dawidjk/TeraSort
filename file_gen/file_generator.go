@@ -1,4 +1,4 @@
-package teragenerator
+package main
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 func main() {
 	fileSize := 1073741824
 
-	seed := int64(29)
+	seed := int64(42)
 	writeSize := 1000000
 	fileName := "/Users/dave07747/Development/Terabyte-Sort/eightGB.bin"
 
