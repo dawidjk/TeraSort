@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -76,7 +75,7 @@ func main() {
 }
 
 func mergeSortConcurrent(s []uint64) []uint64 {
-	routineLimit := runtime.NumCPU() * 2
+	routineLimit := 100
 	channel := make(chan struct{}, routineLimit)
 	defer close(channel)
 	return mergeSort(s, channel)
